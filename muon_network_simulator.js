@@ -99,7 +99,8 @@ const sigs = Object.values(tssKey.shares).map(({index, key}) => {
  */
 console.log(`TSS ${tss_t}/${tss_n}`);
 console.log('Nodes indices: ', neworkNodesIndices);
-console.log("Sigining and verifying the message.");
+console.log(`Message: ${messageHex}`)
+console.log("Signing and verifying the message.");
 for(let i=0; i<10 ; i++) {
   const sigsSubSet = shuffle(sigs).slice(0, tss_t);
   const aggregatedSig = tss.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
