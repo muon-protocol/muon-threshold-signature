@@ -6,36 +6,21 @@
 $ npm install
 $ nodejs index.js
 
-
-    Actual TssKey (prv): e9091f6af2509513592c58236...
-    Actual TssKey (pub): 04115a1c9e558a906...
-Calculated TssKey (pub): 04115a1c9e558a906357...
-
-Reconstructed TssKey (prv): e9091f6af250...
-Reconstructed TssKey (pub): 04115a1c9e558a906357....
-
-Verifying correct message ...
-subset: [2,4,1], verified: true
-subset: [8,5,7], verified: true
-subset: [6,9,3], verified: true
-subset: [2,9,3], verified: true
-subset: [2,7,5], verified: true
-subset: [1,4,8], verified: true
-subset: [6,5,2], verified: true
-subset: [9,7,1], verified: true
-subset: [2,5,9], verified: true
-subset: [1,9,6], verified: true
-
-Verifying wrong message ...
-subset: [5,1,2], verified: false
-subset: [1,4,8], verified: false
-subset: [6,2,9], verified: false
-subset: [1,7,3], verified: false
-subset: [8,9,6], verified: false
-subset: [6,1,5], verified: false
-subset: [9,2,3], verified: false
-subset: [8,7,4], verified: false
-subset: [8,7,3], verified: false
-subset: [6,7,9], verified: false
+TSS 3/9
+Nodes indices:  [
+  1, 2, 3, 4, 5,
+  6, 7, 8, 9
+]
+Sigining and verifying the message.
+Selected nodes: [3,2,5], verified: true
+Selected nodes: [6,2,9], verified: true
+Selected nodes: [2,6,5], verified: true
+Selected nodes: [8,4,7], verified: true
+Selected nodes: [9,7,2], verified: true
+Selected nodes: [3,9,8], verified: true
+Selected nodes: [9,6,7], verified: true
+Selected nodes: [5,8,7], verified: true
+Selected nodes: [3,4,2], verified: true
+Selected nodes: [7,1,3], verified: true
 
 ```
