@@ -1,4 +1,5 @@
 const {range, toBN, BN} = require('./utils')
+const NobelSecp256k1 = require('@noble/secp256k1')
 
 class Polynomial {
   coefficients = []
