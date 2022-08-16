@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node muon_network_simulator.js",
+    "speed-test": "node speed-test.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
