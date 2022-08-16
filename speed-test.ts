@@ -1,11 +1,13 @@
-const {toBN, soliditySha3} = require('web3').utils
+import * as noble from "@noble/secp256k1"
+const Web3 = require('web3')
+const {toBN, soliditySha3} = Web3.utils
 const {shuffle, range} = require('lodash')
-const Polynomial = require('./tss/polynomial')
-const tss = require('./tss/index')
+import Polynomial from './tss/polynomial'
+import * as tss from './tss'
 
 /**
  * The private key will be shared between N nodes.
- * Needs at least T nodes to sign a message. 
+ * Needs at least T nodes to sign a message.
  */
 const tss_t = 3, tss_n=9;
 
@@ -33,8 +35,8 @@ function generateDistributedKey() {
 
   neworkNodesIndices.forEach(index => {
     shares[index].coefPubKeys = shares[index].polynomial.coefPubKeys();
-    shares[index].keyParts = neworkNodesIndices.map(i => shares[i].polynomial.calc(index))
-    shares[index].key = shares[index].keyParts.reduce((sum, val) => sum.add(val).umod(tss.curve.n), toBN(0))
+    shares[index].keyParts = neworkNodesIndices.map(i => shares[i].polynomial.calc(BigInt(index)))
+    shares[index].key = shares[index].keyParts.reduce((sum, val) => noble.utils.mod(sum + val, noble.CURVE.n), BigInt(0))
   })
 
   /**
@@ -73,37 +75,39 @@ let tssKey = generateDistributedKey();
  */
 const messageHex = soliditySha3("hello every body");
 
-/**
- * A random nonce will be generated for signing each message
- * on each node
- */
-const nonce = generateDistributedKey();
+const ITERATION_COUNT = 1000;
+console.log(`Process start for ${ITERATION_COUNT} iteration ...`)
+const startTime = Date.now();
+for(let iteration=0 ; iteration < ITERATION_COUNT ; iteration++) {
+  /**
+   * A random nonce will be generated for signing each message
+   * on each node
+   */
+  const nonce = generateDistributedKey();
 
-/**
- * Network nodes sign the message using their own
- * TSS private key share
- */
-const sigs = Object.values(tssKey.shares).map(({index, key}) => {
-  let nodeNonce = nonce.shares[index];
-  return {
-    index,
-    sign: tss.schnorrSign(key, nodeNonce.key, nonce.totalPubKey, messageHex)
-  };
-});
+  /**
+   * Network nodes sign the message using their own
+   * TSS private key share
+   */
+  const sigs = Object.values(tssKey.shares).map(({index, key}) => {
+    let nodeNonce = nonce.shares[index];
+    return {
+      index,
+      sign: tss.schnorrSign(key, nodeNonce.key, nonce.totalPubKey, messageHex)
+    };
+  });
 
-/**
- * Select random subset of signatures to verify the 
- * signed message.
- * Any subset of signatures should verify that message
- * is signed by the global TSS key
- */
-console.log(`TSS ${tss_t}/${tss_n}`);
-console.log('Nodes indices: ', neworkNodesIndices);
-console.log(`Message: ${messageHex}`)
-console.log("Signing and verifying the message.");
-for(let i=0; i<10 ; i++) {
+  /**
+   * Select random subset of signatures to verify the
+   * signed message.
+   * Any subset of signatures should verify that message
+   * is signed by the global TSS key
+   */
   const sigsSubSet = shuffle(sigs).slice(0, tss_t);
   const aggregatedSig = tss.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
   const verified = tss.schnorrVerify(tssKey.totalPubKey, messageHex, aggregatedSig);
-  console.log(`Selected nodes: [${sigsSubSet.map(s=>s.index).join(',')}], verified:`, verified)
+  if(!verified) {
+    throw `Selected nodes: [${sigsSubSet.map(s => s.index).join(',')}], verified: ${verified}`
+  }
 }
+console.log(`All done in ${(Date.now()-startTime)/1000} seconds`);
