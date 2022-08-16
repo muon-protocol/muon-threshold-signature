@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "./node_modules/.bin/ts-node muon_network_simulator.ts",
+    "speed-test": "./node_modules/.bin/ts-node speed-test.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
