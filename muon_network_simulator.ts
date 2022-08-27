@@ -1,11 +1,11 @@
 const {toBN, soliditySha3} = require('web3').utils
 const {shuffle, range} = require('lodash')
-const Polynomial = require('./tss/polynomial')
-const tss = require('./tss/index')
+import Polynomial from './tss/polynomial'
+import * as tss from './tss/index'
 
 /**
  * The private key will be shared between N nodes.
- * Needs at least T nodes to sign a message. 
+ * Needs at least T nodes to sign a message.
  */
 const tss_t = 3, tss_n=9;
 
@@ -34,7 +34,7 @@ function generateDistributedKey() {
   neworkNodesIndices.forEach(index => {
     shares[index].coefPubKeys = shares[index].polynomial.coefPubKeys();
     shares[index].keyParts = neworkNodesIndices.map(i => shares[i].polynomial.calc(index))
-    shares[index].key = shares[index].keyParts.reduce((sum, val) => sum.add(val).umod(tss.curve.n), toBN(0))
+    shares[index].key = tss.sumMod(shares[index].keyParts, tss.curve.n)
   })
 
   /**
@@ -92,7 +92,7 @@ const sigs = Object.values(tssKey.shares).map(({index, key}) => {
 });
 
 /**
- * Select random subset of signatures to verify the 
+ * Select random subset of signatures to verify the
  * signed message.
  * Any subset of signatures should verify that message
  * is signed by the global TSS key

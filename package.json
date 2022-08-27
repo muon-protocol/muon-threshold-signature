@@ -4,16 +4,21 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node muon_network_simulator.js",
-    "speed-test": "node speed-test.js",
+    "start": "./node_modules/.bin/ts-node muon_network_simulator.ts",
+    "speed-test": "./node_modules/.bin/ts-node speed-test.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@noble/secp256k1": "^1.6.3",
     "elliptic": "^6.5.4",
     "lodash": "^4.17.21",
     "web3": "^1.7.3"
+  },
+  "devDependencies": {
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.3"
   }
 }

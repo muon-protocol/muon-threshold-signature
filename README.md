@@ -4,7 +4,7 @@
 
 ```
 $ npm install
-$ nodejs muon_network_simulator.js
+$ npm start
 
 TSS 3/9
 Nodes indices:  [
