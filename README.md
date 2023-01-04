@@ -1,9 +1,20 @@
 # Muon Threshold Signature
 
-## Run
+# Install dependencies
 
 ```
 $ npm install
+```
+
+# Test DKG process
+
+```
+$ npm run test
+```
+
+## Run Signature process
+
+```
 $ npm start
 
 TSS 3/9

@@ -1,4 +1,4 @@
-const { range, buf2bi } = require('./utils')
+import { range, buf2bigint } from './utils'
 import * as noble from '@noble/secp256k1'
 
 class Polynomial {
@@ -9,7 +9,7 @@ class Polynomial {
   constructor(t, curve, key0?: bigint){
     this.curve = curve;
     this.t = t;
-    this.coefficients = [key0 ? key0 : buf2bi(noble.utils.randomPrivateKey()), ...range(1, t).map(() => buf2bi(noble.utils.randomPrivateKey()))]
+    this.coefficients = [key0 ? key0 : buf2bigint(noble.utils.randomPrivateKey()), ...range(1, t).map(() => buf2bigint(noble.utils.randomPrivateKey()))]
   }
 
   calc(x: bigint): bigint{
@@ -22,7 +22,10 @@ class Polynomial {
     return noble.utils.mod(result, noble.CURVE.n)
   }
 
-  coefPubKeys(): noble.Point[] {
+  coefPubKeys(basePoint?: noble.Point): noble.Point[] {
+    if(!!basePoint) {
+      return this.coefficients.map(pk => basePoint.multiply(pk))
+    }
     return this.coefficients.map(a => noble.Point.fromHex(noble.getPublicKey(a)))
   }
 }

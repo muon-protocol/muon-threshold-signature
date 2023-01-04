@@ -5,16 +5,20 @@
   "main": "index.js",
   "scripts": {
     "start": "./node_modules/.bin/ts-node muon_network_simulator.ts",
-    "speed-test": "./node_modules/.bin/ts-node speed-test.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "./node_modules/.bin/ts-node ./mpc/dkg.test.ts",
+    "speed-test": "./node_modules/.bin/ts-node speed-test.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@noble/secp256k1": "^1.6.3",
+    "ajv": "^8.11.0",
     "elliptic": "^6.5.4",
+    "events-async": "^1.2.1",
     "lodash": "^4.17.21",
+    "node-cache": "^5.1.2",
+    "redis": "^3.1.2",
     "web3": "^1.7.3"
   },
   "devDependencies": {
