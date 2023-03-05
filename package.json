@@ -2,17 +2,18 @@
   "name": "tss-sample",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "./node_modules/.bin/ts-node muon_network_simulator.ts",
-    "test": "./node_modules/.bin/ts-node ./mpc/dkg.test.ts",
-    "speed-test": "./node_modules/.bin/ts-node speed-test.ts"
+    "start": "./node_modules/.bin/ts-node src/muon_network_simulator.ts",
+    "test": "./node_modules/.bin/ts-node src/mpc/dkg.test.ts",
+    "speed-test": "./node_modules/.bin/ts-node src/speed-test.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@noble/secp256k1": "^1.6.3",
+    "@libp2p/logger": "^2.0.2",
     "ajv": "^8.11.0",
     "elliptic": "^6.5.4",
     "events-async": "^1.2.1",
@@ -22,6 +23,7 @@
     "web3": "^1.7.3"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.191",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.3"
   }

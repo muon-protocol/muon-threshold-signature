@@ -1,5 +1,5 @@
-import BaseMessageQueue from './base-message-queue'
-import TimeoutPromise from './timeout-promise'
+import BaseMessageQueue from './base-message-queue.js'
+import TimeoutPromise from './timeout-promise.js'
 import NodeCache from 'node-cache'
 
 const callCache = new NodeCache({

@@ -1,7 +1,10 @@
-const {toBN, soliditySha3} = require('web3').utils
-const {shuffle, range} = require('lodash')
-import Polynomial from './tss/polynomial'
-import * as tss from './tss/index'
+import Web3 from 'web3'
+import lodash from 'lodash';
+import Polynomial from './tss/polynomial.js'
+import * as TssModule from './tss/index.js'
+
+const {shuffle, range} = lodash
+const {toBN, soliditySha3} = Web3.utils
 
 /**
  * The private key will be shared between N nodes.
@@ -23,7 +26,7 @@ function generateDistributedKey() {
   const shares = neworkNodesIndices.reduce((acc, idx) => {
     acc[idx] = {
       index: idx,
-      polynomial: new Polynomial(tss_t, tss.curve),
+      polynomial: new Polynomial(tss_t, TssModule.curve),
       coefPubKeys: null,
       keyParts: null,
       key: null,
@@ -34,7 +37,7 @@ function generateDistributedKey() {
   neworkNodesIndices.forEach(index => {
     shares[index].coefPubKeys = shares[index].polynomial.coefPubKeys();
     shares[index].keyParts = neworkNodesIndices.map(i => shares[i].polynomial.calc(index))
-    shares[index].key = tss.sumMod(shares[index].keyParts, tss.curve.n)
+    shares[index].key = TssModule.sumMod(shares[index].keyParts, TssModule.curve.n)
   })
 
   /**
@@ -51,7 +54,7 @@ function generateDistributedKey() {
     .map(index => shares[index].coefPubKeys)
     .reduce((acc, coefPubKeys) => {
       // return tss.pointAdd(acc, tss.calcPolyPoint('0', coefPubKeys))
-      return tss.pointAdd(acc, coefPubKeys[0])
+      return TssModule.pointAdd(acc, coefPubKeys[0])
     }, null)
 
   return {
@@ -87,7 +90,7 @@ const sigs = Object.values(tssKey.shares).map(({index, key}) => {
   let nodeNonce = nonce.shares[index];
   return {
     index,
-    sign: tss.schnorrSign(key, nodeNonce.key, nonce.totalPubKey, messageHex)
+    sign: TssModule.schnorrSign(key, nodeNonce.key, nonce.totalPubKey, messageHex)
   };
 });
 
@@ -103,7 +106,7 @@ console.log(`Message: ${messageHex}`)
 console.log("Signing and verifying the message.");
 for(let i=0; i<10 ; i++) {
   const sigsSubSet = shuffle(sigs).slice(0, tss_t);
-  const aggregatedSig = tss.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
-  const verified = tss.schnorrVerify(tssKey.totalPubKey, messageHex, aggregatedSig);
+  const aggregatedSig = TssModule.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
+  const verified = TssModule.schnorrVerify(tssKey.totalPubKey, messageHex, aggregatedSig);
   console.log(`Selected nodes: [${sigsSubSet.map(s=>s.index).join(',')}], verified:`, verified)
 }

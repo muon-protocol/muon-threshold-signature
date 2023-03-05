@@ -1,11 +1,48 @@
 {
   "compilerOptions": {
+    "strict": true,
+    "target": "ES2020",
+    "module": "ESNext",
+    //    "target": "es5",
+    //    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "noImplicitAny": false /* Raise error on expressions and declarations with an implied 'any' type. */,
+    "strictNullChecks": true /* Enable strict null checks. */,
+    "strictFunctionTypes": true /* Enable strict checking of function types. */,
+    "noUnusedLocals": false /* Report errors on unused locals. */,
+    "noUnusedParameters": false /* Report errors on unused parameters. */,
+    "noImplicitReturns": true /* Report error when not all code paths in function return a value. */,
+    "noFallthroughCasesInSwitch": true /* Report errors for fallthrough cases in switch statement. */,
+    "strictPropertyInitialization": false, /*  */
+    "importHelpers": true,
+    "skipLibCheck": true,
     "esModuleInterop": true,
-    "lib": [
-      "es2020",
-      "esnext"
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "useUnknownInCatchVariables": false,
+
+    "stripInternal": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "outDir": "./dist/tsc/",
+    "types": [
+      "node",
+      "jest"
     ],
-    "module": "commonjs",
-    "target": "es2020"
-  }
+    "lib": [
+      "es2015"
+    ]
+  },
+  "ts-node": {
+    "esm": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts"
+  ]
 }

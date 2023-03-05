@@ -1,4 +1,4 @@
-import BaseMessageBus from './base-message-bus'
+import BaseMessageBus from './base-message-bus.js'
 
 export default class MessageSubscriber extends BaseMessageBus {
 

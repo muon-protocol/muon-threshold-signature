@@ -1,4 +1,4 @@
-import BaseMessageQueue from './base-message-queue'
+import BaseMessageQueue from './base-message-queue.js'
 import { IpcCallConfig } from './types'
 import { promisify } from "util"
 

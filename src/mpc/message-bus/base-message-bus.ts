@@ -1,7 +1,7 @@
 import { createClient, RedisClient } from 'redis'
-import redisConfig from './redis-config'
+import redisConfig from './redis-config.js'
 import Events from 'events-async'
-import {uuid} from '../../helpers'
+import {uuid} from '../../helpers.js'
 
 export default class BaseMessageBus extends Events{
   /**
