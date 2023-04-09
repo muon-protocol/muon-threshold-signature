@@ -23,7 +23,7 @@ const threshold = 3;
 const partners = range(threshold+1).map(i => `${i+1}`)
 const random = () => Math.floor(Math.random()*9999999)
 
-type KeyConstructionData = {
+export type KeyConstructionData = {
   id: string,
   partners: string[],
   t: number,

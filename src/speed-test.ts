@@ -1,9 +1,14 @@
-import * as noble from "@noble/secp256k1"
-const Web3 = require('web3')
+import Web3 from 'web3'
+import lodash from 'lodash'
+import * as TssModule from './tss/index.js'
+import FakeNetwork from "./mpc/fake-network.js";
+import {MapOf} from "./mpc/types";
+import {DistKeyJson, DistributedKeyGeneration} from "./mpc/dkg.js";
+import {KeyConstructionData} from "./mpc/dkg.test";
+
 const {toBN, soliditySha3} = Web3.utils
-const {shuffle, range} = require('lodash')
-import Polynomial from './tss/polynomial'
-import * as tss from './tss'
+const {shuffle, range} = lodash
+const random = () => Math.floor(Math.random()*9999999)
 
 /**
  * The private key will be shared between N nodes.
@@ -15,99 +20,102 @@ const tss_t = 3, tss_n=9;
  * There are N network nodes
  * node-1 ... node-(N+1)
  */
-const neworkNodesIndices = range(1, tss_n+1);
+const networkNodesIndices = range(1, tss_n+1).map(n => n.toString());
+const fakeNets:FakeNetwork[] = networkNodesIndices.map(id => new FakeNetwork(id));
 
-
-/**
- * Generates a TSS key with N shares.
- */
-function generateDistributedKey() {
-  const shares = neworkNodesIndices.reduce((acc, idx) => {
-    acc[idx] = {
-      index: idx,
-      polynomial: new Polynomial(tss_t, tss.curve),
-      coefPubKeys: null,
-      keyParts: null,
-      key: null,
-    }
-    return acc;
-  }, {});
-
-  neworkNodesIndices.forEach(index => {
-    shares[index].coefPubKeys = shares[index].polynomial.coefPubKeys();
-    shares[index].keyParts = neworkNodesIndices.map(i => shares[i].polynomial.calc(BigInt(index)))
-    shares[index].key = shares[index].keyParts.reduce((sum, val) => noble.utils.mod(sum + val, noble.CURVE.n), BigInt(0))
+async function keyGen(partners: string[], networks: FakeNetwork[], cData: KeyConstructionData): Promise<MapOf<DistKeyJson>> {
+  let keyGens = partners.map(p => {
+    return new DistributedKeyGeneration(cData.id, '1', cData.partners, cData.t)
   })
-
-  /**
-   * Total publicKey of shared key is sum of coefficient[0] of all polynomials
-   * polynomial 1 => y = a1.x^2 + b1.x + c1
-   * polynomial 2 => y = a2.x^2 + b2.x + c2
-   * polynomial 3 => y = a3.x^2 + b3.x + c3
-   *
-   * Total public key = PubKey(c1) + PubKey(c2) + PubKey(c3)
-   *
-   * We display each polynomials like this [c1, b1, a1], ...
-   */
-  const totalPubKey = neworkNodesIndices
-    .map(index => shares[index].coefPubKeys)
-    .reduce((acc, coefPubKeys) => {
-      // return tss.pointAdd(acc, tss.calcPolyPoint('0', coefPubKeys))
-      return tss.pointAdd(acc, coefPubKeys[0])
-    }, null)
-
-  return {
-    totalPubKey,
-    shares
-  }
+  let allNodeResults: any[] = await Promise.all(
+    partners.map(
+      (p, i) => keyGens[i].runByNetwork(networks[i], 20000)
+    )
+  );
+  return allNodeResults.reduce((obj, r) => {
+    const json = r.toJson()
+    obj[json.index] = json;
+    return obj;
+  }, {})
 }
 
-
-/**
- * tssKey.totalPubkey --> global public key
- * tssKey.shares --> N TSS private key shares. Each one
- * will be assigned to one of the nodes
- */
-let tssKey = generateDistributedKey();
-
-/**
- * The message to be signed
- */
-const messageHex = soliditySha3("hello every body");
-
-const ITERATION_COUNT = 1000;
-console.log(`Process start for ${ITERATION_COUNT} iteration ...`)
-const startTime = Date.now();
-for(let iteration=0 ; iteration < ITERATION_COUNT ; iteration++) {
-  /**
-   * A random nonce will be generated for signing each message
-   * on each node
-   */
-  const nonce = generateDistributedKey();
+async function run() {
 
   /**
-   * Network nodes sign the message using their own
-   * TSS private key share
+   * distKey[<any-ID>].publicKey --> global public key
+   * distKey[<any-ID>].shares --> N TSS private key shares. Each one
+   * will be assigned to one of the nodes
    */
-  const sigs = Object.values(tssKey.shares).map(({index, key}) => {
-    let nodeNonce = nonce.shares[index];
-    return {
-      index,
-      sign: tss.schnorrSign(key, nodeNonce.key, nonce.totalPubKey, messageHex)
-    };
+  let distKey: MapOf<DistKeyJson> = await keyGen(networkNodesIndices, fakeNets, {
+    id: `dkg-${Date.now()}${random()}`,
+    partners: networkNodesIndices,
+    t: tss_t,
   });
 
   /**
-   * Select random subset of signatures to verify the
-   * signed message.
-   * Any subset of signatures should verify that message
-   * is signed by the global TSS key
+   * The message to be signed
    */
-  const sigsSubSet = shuffle(sigs).slice(0, tss_t);
-  const aggregatedSig = tss.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
-  const verified = tss.schnorrVerify(tssKey.totalPubKey, messageHex, aggregatedSig);
-  if(!verified) {
-    throw `Selected nodes: [${sigsSubSet.map(s => s.index).join(',')}], verified: ${verified}`
+  const messageHex = soliditySha3("hello every body");
+
+  const ITERATION_COUNT = 1000;
+  console.log(`Process start for ${ITERATION_COUNT} iteration ...`)
+  const startTime = Date.now();
+  const verifyingPublicKey = TssModule.keyFromPublic(distKey["1"].publicKey)
+  for (let iteration = 0; iteration < ITERATION_COUNT; iteration++) {
+    let t0 = Date.now()
+    /**
+     * A nonce (distributed key) will be generated for signing the message
+     */
+    const distNonce: MapOf<DistKeyJson> = await keyGen(networkNodesIndices, fakeNets, {
+      id: `dkg-${Date.now()}${random()}`,
+      partners: networkNodesIndices,
+      t: tss_t,
+    });
+    const keyGenTime = Date.now()
+
+    /**
+     * Network nodes sign the message using their own
+     * TSS private key share
+     */
+    const sigs = Object.keys(distKey).map(id => {
+      const key = toBN(distKey[id].share);
+      const nonce = toBN(distNonce[id].share)
+      const noncePublicKey = TssModule.keyFromPublic(distNonce[id].publicKey);
+
+      return {
+        index: id,
+        sign: TssModule.schnorrSign(key, nonce, noncePublicKey, messageHex)
+      };
+    });
+    const signingTime = Date.now();
+
+    /**
+     * Select random subset of signatures to verify the
+     * signed message.
+     * Any subset of signatures should verify that message
+     * is signed by the global TSS key
+     */
+    const sigsSubSet = shuffle(sigs).slice(0, tss_t);
+    const aggregatedSig = TssModule.schnorrAggregateSigs(tss_t, sigsSubSet.map(s => s.sign), sigsSubSet.map(s => s.index))
+    const verified = TssModule.schnorrVerify(verifyingPublicKey, messageHex, aggregatedSig);
+    if (!verified) {
+      throw `Selected nodes: [${sigsSubSet.map(s => s.index).join(',')}], verified: ${verified}`
+    }
+    const verificationTime = Date.now();
+
+    console.log(
+      `iteration: ${iteration}/${ITERATION_COUNT}`
+      +`, total: ${verificationTime-t0} ms`
+      +`, keyGen: ${keyGenTime-t0} ms`
+      +`, signing: ${signingTime-keyGenTime} ms`
+      +`, verifying: ${verificationTime-signingTime}`
+    );
   }
+  console.log(`All done in ${(Date.now() - startTime) / 1000} seconds`);
 }
-console.log(`All done in ${(Date.now()-startTime)/1000} seconds`);
+
+run()
+  .catch(e => console.log(e))
+  .finally(() => {
+    process.exit(0)
+  })

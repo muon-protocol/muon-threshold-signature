@@ -1,10 +1,10 @@
 import Web3 from 'web3'
 import lodash from 'lodash';
-import Polynomial from './tss/polynomial.js'
 import * as TssModule from './tss/index.js'
 import FakeNetwork from "./mpc/fake-network.js";
 import {DistKeyJson, DistributedKeyGeneration} from "./mpc/dkg.js";
 import {MapOf} from "./mpc/types";
+import {KeyConstructionData} from "./mpc/dkg.test";
 
 const {shuffle, range} = lodash
 const {toBN, soliditySha3} = Web3.utils
@@ -23,13 +23,7 @@ const tss_t = 3, tss_n=9;
 const networkNodesIndices = range(1, tss_n+1).map(n => n.toString());
 const fakeNets:FakeNetwork[] = networkNodesIndices.map(id => new FakeNetwork(id));
 
-type KeyConstructionData = {
-  id: string,
-  partners: string[],
-  t: number,
-}
-
-async function keyGen(partners: string[], networks: FakeNetwork[], cData: KeyConstructionData): Promise<MapOf<DistKeyJson>> {
+export async function keyGen(partners: string[], networks: FakeNetwork[], cData: KeyConstructionData): Promise<MapOf<DistKeyJson>> {
   let keyGens = partners.map(p => {
     return new DistributedKeyGeneration(cData.id, '1', cData.partners, cData.t)
   })
