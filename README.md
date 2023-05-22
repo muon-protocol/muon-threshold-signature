@@ -12,11 +12,9 @@ The implementation consists of three main sections:
 ## Audit
 Our implementation has undergone an internal audit by [Habib Yajam](https://www.linkedin.com/in/habib-yajam-98b7126a), a trusted third-party auditor. The audit was conducted to ensure the security and correctness of our implementation. The audit suggested:
 - Using proof of possession instead of hash commitments for guarding against rogue key attacks to improve 
-  performance and maintain same security characteristics. [details]
-  (audit/Proof%20of%20Possession%20in%20Schnorr.pdf) | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/4f304c65aa5d9499504228d6557aebee76704a1e)
+  performance and maintain same security characteristics. [details](audit/Proof%20of%20Possession%20in%20Schnorr.pdf) | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/4f304c65aa5d9499504228d6557aebee76704a1e)
 - Integrating elliptic curve point validation to the implementation to ensure that all points used in cryptographic 
-  operations belong to the intended curve. This improves security against active attackers. [details]
-  (audit/Point%20Validation%20in%20Elliptic%20Curve%20Cryptography.pdf) | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/b2151593c7ba75e63815245fd4f2f2ce7198137d)
+  operations belong to the intended curve. This improves security against active attackers. [details](audit/Point%20Validation%20in%20Elliptic%20Curve%20Cryptography.pdf) | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/b2151593c7ba75e63815245fd4f2f2ce7198137d)
 - Including the public key in the hashed challenge of Schnorr signatures to enhance the security of the protocol. 
   Accordingly, some theoretical attacks are prevented resulting in stronger security guarantees.
   [details](audit/The%20Challenge%20Value%20in%20Schnorr%20Signature%20Schemes.pdf) | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/b2151593c7ba75e63815245fd4f2f2ce7198137d)
