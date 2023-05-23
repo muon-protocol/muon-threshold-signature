@@ -81,10 +81,11 @@ async function run() {
       const key = toBN(distKey[id].share);
       const nonce = toBN(distNonce[id].share)
       const noncePublicKey = TssModule.keyFromPublic(distNonce[id].publicKey);
+      const publicKey = TssModule.keyFromPublic(distKey[id].publicKey);
 
       return {
         index: id,
-        sign: TssModule.schnorrSign(key, nonce, noncePublicKey, messageHex)
+        sign: TssModule.schnorrSign(key, nonce, noncePublicKey, publicKey, messageHex)
       };
     });
     const signingTime = Date.now();

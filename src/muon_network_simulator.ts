@@ -72,12 +72,13 @@ async function run() {
    */
   const sigs = Object.keys(distKey).map(id => {
     const key = toBN(distKey[id].share);
-    const nonce = toBN(distNonce[id].share)
-    const noncePublicKey = TssModule.keyFromPublic(distNonce[id].publicKey);
+    const nonce = toBN(distNonce[id].share);
+    const noncePoint = TssModule.keyFromPublic(distNonce[id].publicKey);
+    const publicKey = TssModule.keyFromPublic(distKey[id].publicKey);
 
     return {
       index: id,
-      sign: TssModule.schnorrSign(key, nonce, noncePublicKey, messageHex)
+      sign: TssModule.schnorrSign(key, nonce, noncePoint, publicKey, messageHex)
     };
   });
 

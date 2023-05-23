@@ -1,4 +1,4 @@
-import {PublicKey} from "./types";
+import {PublicKey} from './types';
 import ethJsUtil from 'ethereumjs-util'
 import {BN, toBN, keccak256, range, pub2addr} from './utils.js'
 import assert from 'assert'
@@ -23,12 +23,22 @@ const HALF_N = curve.n!.shrn(1).addn(1);
 const H = curve.keyFromPublic("04206ae271fa934801b55f5144bec8416be0b85f22d452ad410f3f0fca1083dc7ae41249696c446f8c5b166760377115943662991c35ff02f9585f892970af89ed", 'hex').getPublic()
 
 function pointAdd(point1?: PublicKey, point2?: PublicKey): PublicKey {
-  if (point1 === null)
-    return point2!;
-  if (point2 === null)
-    return point1!;
+  // if a point is null then return another one as the result of the addition
+  if (point1 === null) {
+    return point2;
+  }
+  if (point2 === null) {
+    return point1;
+  }
+  // calculate the addition of the points
+  const result = point1?.add(point2);
 
-  return point1!.add(point2!);
+  // if any of the input points are not valid elliptic curve points return generator as output
+  if ((point1.validate() && point2.validate()) === false) {
+    return curve.g;
+  } else {
+    return result;
+  }
 }
 
 function calcPoly(x, polynomial) {
@@ -54,8 +64,16 @@ function calcPolyPointOld(x, polynomial): PublicKey {
 
 function calcPolyPoint(x: string|number, polynomial: PublicKey[]): PublicKey {
   const bnx = toBN(x);
-  const coeffs = polynomial.map((_,i) => bnx.pow(toBN(i)).umod(curve.n!))
-  return curve.curve._endoWnafMulAdd(polynomial, coeffs, false);
+  const validated = polynomial.reduce((accumulator, currentValue) => {
+    accumulator && currentValue.validate();
+  }, true);
+  const coefArray = polynomial.map((_,i) => bnx.pow(toBN(i)).umod(curve.n));
+  const result = curve.curve._endoWnafMulAdd(polynomial, coefArray, false);
+  if (validated === false) {
+    return curve.g;
+  } else {
+    return result;
+  }
 }
 
 function random() {
@@ -141,20 +159,35 @@ function key2pub(privateKey) {
   return curve.g.mul(_PK);
 }
 
-function schnorrHash(publicKey, msg) {
-  let address = pub2addr(publicKey)
-  let addressBuff = Buffer.from(address.replace(/^0x/i, ''), 'hex');
-  let msgBuff = Buffer.from(msg.replace(/^0x/i, ''), 'hex');
-  let totalBuff = Buffer.concat([addressBuff, msgBuff])
+function schnorrHash(noncePoint, pubKey, msg) {
+  const nonceAddress = pub2addr(noncePoint);
+  const nonceAddressBuff = Buffer.from(nonceAddress.replace(/^0x/i, ''), 'hex');
+
+  // calculate public ket address to add to the challenge hash
+  const pubKeyAddress = pub2addr(pubKey);
+  const pubKeyAddressBuff = Buffer.from(pubKeyAddress.replace(/^0x/i, ''), 'hex');
+
+  const msgBuff = Buffer.from(msg.replace(/^0x/i, ''), 'hex');
+
+  const totalBuff = Buffer.concat([nonceAddressBuff, pubKeyAddressBuff, msgBuff]);
   // @ts-ignore
-  return keccak256(totalBuff)
+  return keccak256(totalBuff);
 }
 
-function schnorrSign(sharedPrivateKey, sharedK, kPub, msg) {
-  let _sharedPrivateKey = BN.isBN(sharedPrivateKey) ? sharedPrivateKey : toBN(sharedPrivateKey);
-  let e = toBN(schnorrHash(kPub, msg))
-  let s = sharedK.sub(_sharedPrivateKey.mul(e)).umod(curve.n);
-  return {s, e}
+function schnorrSign(sharedPrivateKey, sharedK, noncePoint, publicKey, msg) {
+  // make _sharedPrivateKey that is the BN from of sharedPrivateKey
+  let _sharedPrivateKey: BN;
+  if (BN.isBN(sharedPrivateKey)) {
+    _sharedPrivateKey = sharedPrivateKey;
+  } else {
+    _sharedPrivateKey = toBN(sharedPrivateKey);
+  }
+
+  // calculate 'e' of the signature consider adding public key to challenge value
+  const e = toBN(schnorrHash(noncePoint, publicKey, msg));
+  const s = sharedK.sub(_sharedPrivateKey.mul(e)).umod(curve.n);
+
+  return {s, e};
 }
 
 export function stringifySignature(sign: {s: BN, e: BN}): string {
@@ -172,13 +205,25 @@ export function splitSignature(signature: string): {s: BN, e: BN} {
 }
 
 function schnorrVerify(pubKey: PublicKey, msg, sig:{s: BN, e: BN}|string) {
-  if(typeof sig === 'string')
+  if(typeof sig === 'string') {
     sig = splitSignature(sig);
-  if(!sig.s.lt(curve.n!))
-    throw "signature must be reduced modulo N"
-  let r_v = pointAdd(curve.g.mul(sig.s), pubKey.mul(sig.e))
-  let e_v = schnorrHash(r_v, msg)
-  return toBN(e_v).eq(sig.e);
+  }
+
+  // Prevent denial of service attacks by bounding the 's' and 'e' to values lower than curve.n
+  const s = sig.s.umod(curve.n);
+  const e = sig.e.umod(curve.n);
+
+  // Calculate verifying values of signature use public key as part of challenge hash
+  const rv = pointAdd(curve.g.mul(s), pubKey.mul(e));
+  const ev = schnorrHash(rv, pubKey, msg);
+  const result = toBN(ev).eq(e);
+
+  // Return only if the public key value is a valid point on curve
+  if (pubKey.validate() === false) {
+    return false;
+  } else {
+    return result;
+  }
 }
 
 function schnorrVerifyWithNonceAddress(hash, signature, nonceAddress, signingPubKey) {

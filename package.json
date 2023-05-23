@@ -16,6 +16,7 @@
     "@libp2p/logger": "^2.0.2",
     "ajv": "^8.11.0",
     "elliptic": "^6.5.4",
+    "ethereumjs-util": "^7.1.5",
     "events-async": "^1.2.1",
     "lodash": "^4.17.21",
     "node-cache": "^5.1.2",
@@ -23,6 +24,7 @@
     "web3": "^1.7.3"
   },
   "devDependencies": {
+    "@noble/secp256k1": "^2.0.0",
     "@types/lodash": "^4.14.191",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.3"
