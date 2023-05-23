@@ -14,7 +14,8 @@ There is an ongoing audit and code review in progress for our project. For the t
 implementation has undergone the first phase of internal audit by
 [Habib Yajam](https://www.linkedin.com/in/habib-yajam-98b7126a), a trusted third-party auditor. The audit was 
 conducted to ensure the security and correctness of our implementation with a focus on cryptographic components of 
-the scheme and implementation. The audit suggested:
+the scheme and implementation (There will be more audits in the future with more focus on the code and implementation). 
+The audit suggested:
 - Using proof of possession instead of hash commitments for guarding against rogue key attacks to improve 
   performance and maintain same security characteristics. [details](audit/Proof%20of%20Possession%20in%20Schnorr.pdf)
   | [commit](https://github.com/muon-protocol/muon-threshold-signature/commit/4f304c65aa5d9499504228d6557aebee76704a1e)
