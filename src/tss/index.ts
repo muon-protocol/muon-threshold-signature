@@ -1,4 +1,4 @@
-import {PublicKey} from './types';
+import {PublicKey, PublicKeyShare} from './types';
 import ethJsUtil from 'ethereumjs-util'
 import {BN, toBN, keccak256, range, pub2addr} from './utils.js'
 import assert from 'assert'
@@ -119,7 +119,7 @@ function lagrangeCoef(j, t, shares, index) {
   return numerator.mul(denominator.invm(curve.n));
 }
 
-function reconstructKey(shares, t, index=0) {
+function reconstructKey(shares, t, index=0): BN {
   assert(shares.length >= t);
   let sum = toBN(0);
   for (let j = 0; j < t; j++) {
@@ -128,6 +128,17 @@ function reconstructKey(shares, t, index=0) {
     sum = sum.add(key.mul(coef))
   }
   return sum.umod(curve.n!);
+}
+
+export function reconstructPubKey(shares: PublicKeyShare[], t, index=0): PublicKey {
+  assert(shares.length >= t);
+  let sum: PublicKey|null = null;
+  for (let j = 0; j < t; j++) {
+    let coef = lagrangeCoef(j, t, shares, index)
+    let pubKey:PublicKey = shares[j].publicKey
+    sum = pointAdd(sum, pubKey.mul(coef))
+  }
+  return sum;
 }
 
 function addKeys(key1, key2) {
