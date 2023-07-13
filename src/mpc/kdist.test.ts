@@ -4,8 +4,8 @@
  * Sign message
  * Verify signature
  */
-import {DistKeyJson, DistributedKeyGeneration} from "./dkg.js";
-import {KeyRedistribution} from "./kdist.js"
+import {DistKeyJson, DistributedKeyGeneration, DKGOpts} from "./dkg.js";
+import {KeyReDistOpts, KeyRedistribution} from "./kdist.js"
 import FakeNetwork from './fake-network.js';
 import {bn2str} from './utils.js'
 import Web3 from 'web3'
@@ -20,14 +20,16 @@ const {toBN, randomHex} = Web3.utils
  * Needs to at least 3 individual's signature to recover global signature
  */
 const N = TssModule.curve.n
-const threshold = 3;
-const nextThreshold = 2;
-const partners = range(Math.max(threshold, nextThreshold)+1).map(i => `${i+1}`)
+const threshold = 2;
+const nextThreshold = 4;
+const partyCount = 6
+const partners = range(partyCount).map(i => `${i+1}`)
 const random = () => Math.floor(Math.random()*9999999)
 
 export type KeyConstructionData = {
   id: string,
   partners: string[],
+  dealers?: string[],
   t: number,
   pk?: string,
 }
@@ -45,9 +47,28 @@ function resultOk(realKey: string|null, realPubKey: string|null, resultPubKey: s
   return true
 }
 
+function checkSharesCorrectness(realPrivateKey, t, keyShares) {
+  const realPubKey = realPrivateKey ? TssModule.keyFromPrivate(realPrivateKey).getPublic().encode("hex", true) : null;
+
+  /** check total key reconstruction */
+  const shares = keyShares.map(r => ({i: r.index, key: TssModule.keyFromPrivate(r.share)}))
+  const reconstructedKey = bn2str(TssModule.reconstructKey(shares.slice(-t), t, 0))
+  const reconstructedPubKey = TssModule.keyFromPrivate(reconstructedKey).getPublic().encode('hex', true)
+
+  const pubKeyList = keyShares.map(key => key.publicKey)
+  return uniq(pubKeyList).length===1 && resultOk(realPrivateKey, realPubKey, keyShares[0].publicKey, reconstructedKey, reconstructedPubKey)
+}
+
 async function keyGen(partners: string[], networks: FakeNetwork[], cData: KeyConstructionData): Promise<DistKeyJson[]> {
 
-  let keyGens = partners.map(p => new DistributedKeyGeneration(cData.id, '1', cData.partners, cData.t, cData.pk))
+  let keyGenOpts: DKGOpts = {
+    id: cData.id,
+    starter: "1",
+    partners: cData.partners,
+    t: cData.t,
+    value: cData.pk
+  }
+  let keyGens = partners.map(p => new DistributedKeyGeneration(keyGenOpts))
 
   let allNodeResults: any[] = await Promise.all(
     partners.map(
@@ -65,8 +86,16 @@ async function keyRedistribute(
   shares: DistKeyJson[]
 ): Promise<DistKeyJson[]> {
 
+  let keyReDistOpts: KeyReDistOpts = {
+    id: cData.id,
+    starter: "1",
+    partners: cData.partners,
+    dealers: cData.dealers,
+    t: cData.t,
+    previousT: cData.previousT,
+  }
   let keyReDists = partners.map((p, index) => {
-    return new KeyRedistribution(cData.id, '1', cData.partners, cData.t, cData.previousT, shares[index].share)
+    return new KeyRedistribution({...keyReDistOpts, value: shares[index]?.share})
   })
 
   let allNodeResults: any[] = await Promise.all(
@@ -85,13 +114,13 @@ async function run() {
   const specialPrivateKeys = [
     /** first 100 private keys */
     ...(new Array(100).fill(0).map((_, i) => bn2str(toBN(i+1).umod(N!)))),
-    //
+
     /** 100 random and unknown private key */
     ...(new Array(100).fill(null)),
-    //
+
     /** 100 random and known private key */
     ...(new Array(100).fill(0).map(() => bn2str(toBN(randomHex(32)).umod(N!)))),
-    //
+
     /** last 100 private keys */
     ...(new Array(100).fill(0).map((_, i) => bn2str(TssModule.curve.n!.subn(100-i)))),
   ]
@@ -101,14 +130,19 @@ async function run() {
     const startTime = Date.now();
     // const realPrivateKey = bn2str(toBN(randomHex(32)).umod(N));
     const realPrivateKey = specialPrivateKeys[i];
-    const realPubKey = realPrivateKey ? TssModule.keyFromPrivate(realPrivateKey).getPublic().encode("hex", true) : null;
 
-    let initialKeyShares = await keyGen(partners, fakeNets, {
+    const initialPartners = partners.slice(0, nextThreshold+1);
+    let initialKeyShares = await keyGen(initialPartners, fakeNets, {
       id: `dkg-${Date.now()}${random()}`,
-      partners,
+      partners: initialPartners,
       t: threshold,
       pk: realPrivateKey,
     });
+
+    if(!checkSharesCorrectness(realPrivateKey, threshold, initialKeyShares)) {
+      console.log(`i: ${i+1}/${specialPrivateKeys.length}, initial key share failed`)
+      continue;
+    }
 
     let keyShares = await keyRedistribute(
       partners,
@@ -116,30 +150,17 @@ async function run() {
       {
         id: `kredist-${Date.now()}${random()}`,
         partners,
+        dealers: initialPartners,
         previousT: threshold,
         t: nextThreshold,
       },
       initialKeyShares
     );
 
-    /** check total key reconstruction */
-    const shares = keyShares.map(r => ({i: r.index, key: TssModule.keyFromPrivate(r.share)}))
-    const reconstructedKey = bn2str(TssModule.reconstructKey(shares, nextThreshold, 0))
-    const reconstructedPubKey = TssModule.keyFromPrivate(reconstructedKey).getPublic().encode('hex', true)
-
-    const pubKeyList = keyShares.map(key => key.publicKey)
-    if(uniq(pubKeyList).length===1 && resultOk(realPrivateKey, realPubKey, keyShares[0].publicKey, reconstructedKey, reconstructedPubKey))
+    if(checkSharesCorrectness(realPrivateKey, nextThreshold, keyShares))
       console.log(`i: ${i+1}/${specialPrivateKeys.length}, match: OK, key party: ${keyShares[0].partners} time: ${Date.now() - startTime} ms`)
     else {
       console.log(`i: ${i+1}/${specialPrivateKeys.length}, match: false`)
-      console.log({
-        partnersPubKeys: pubKeyList,
-        realPrivateKey,
-        realPubKey,
-        resultPubKey: keyShares[0].publicKey,
-        reconstructedKey,
-        reconstructedPubKey,
-      })
     }
   }
   const t2 = Date.now()

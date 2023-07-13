@@ -1,20 +1,19 @@
 import {MapOf} from "./types";
 import * as TssModule from "../tss/index.js";
 import {PublicKey, PublicKeyShare} from "../tss/types";
-import {DistKey, DistributedKeyGeneration} from "./dkg.js";
-import BN from 'bn.js';
+import {DistKey, DistributedKeyGeneration, DKGOpts} from "./dkg.js";
 
+export type KeyReDistOpts = DKGOpts & {previousT: number}
 
 export class KeyRedistribution extends DistributedKeyGeneration {
   previousT: number;
 
-  constructor(id: string, starter: string, partners: string[], t: number, previousT: number, value?: BN|string, extra: any={}) {
-    super(id, starter, partners, t, value, extra);
-    this.previousT = previousT;
+  constructor(options: KeyReDistOpts) {
+    super(options);
+    this.previousT = options.previousT;
   }
 
   onComplete(roundsArrivedMessages: MapOf<MapOf<{send: any, broadcast: any}>>, networkId: string, qualified: string[]): any {
-    // console.log(`mpc complete`, roundsArrivedMessages)
     const r1Msgs = this.getRoundReceives('round1')
     const r2Msgs = this.getRoundReceives('round2')
     const {t, previousT} = this
