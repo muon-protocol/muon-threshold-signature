@@ -51,6 +51,19 @@ i: 209, match: OK, key party: 1,2,3,4 time: 151 ms
   total time: 34495 ms
 average time: 164 ms
 ```
+#### Testing Key redistribution
+```
+$ npm run redist
+> tss-sample@1.0.0 redist
+> ./node_modules/.bin/ts-node src/mpc/kdist.test.ts
+
+i: 1/400, match: OK, key party: 1,2,3,4,5 time: 1038 ms
+i: 2/400, match: OK, key party: 1,2,3,4,5 time: 606 ms
+i: 3/400, match: OK, key party: 1,2,3,4,5 time: 561 ms
+i: 4/400, match: OK, key party: 1,2,3,4,5 time: 544 ms
+i: 5/400, match: OK, key party: 1,2,3,4,5 time: 550 ms
+...
+```
 #### Testing Signing Process
 
 ```

@@ -7,6 +7,7 @@
   "scripts": {
     "start": "./node_modules/.bin/ts-node src/muon_network_simulator.ts",
     "test": "./node_modules/.bin/ts-node src/mpc/dkg.test.ts",
+    "redist": "./node_modules/.bin/ts-node src/mpc/kdist.test.ts",
     "speed-test": "./node_modules/.bin/ts-node src/speed-test.ts"
   },
   "keywords": [],
