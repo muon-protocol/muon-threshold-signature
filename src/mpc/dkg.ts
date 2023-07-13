@@ -1,11 +1,13 @@
 import {MapOf, RoundOutput} from "./types";
-import {MPCOpts, MultiPartyComputation} from "./base.js";
+import validations from './dkg-validations.js';
+import {MultiPartyComputation} from "./base.js";
 import {bn2str} from './utils.js'
 import Web3 from 'web3'
 import Polynomial from "../tss/polynomial.js";
 import * as TssModule from "../tss/index.js";
 import {PublicKey} from "../tss/types";
 import BN from 'bn.js';
+import {DistKey} from "./dist-key.js";
 
 const {soliditySha3} = Web3.utils
 
@@ -48,156 +50,6 @@ type Round3Broadcast = {
   malicious: string[],
 }
 
-export type DistKeyJson = {
-  index: string,
-  share: string,
-  address: string,
-  publicKey: string,
-  partners: string[],
-  curve: {
-    t: number,
-    Fx: string[]
-  }
-}
-
-export class DistKey {
-  index: string;
-  share: BN;
-  address: string;
-  publicKey: PublicKey;
-  partners: string[];
-  curve: {
-    t: number,
-    Fx: PublicKey[]
-  };
-
-  constructor(index: string, share: BN, address: string, publicKey : PublicKey, partners: string[], curve: {t: number, Fx: PublicKey[]}) {
-    this.index = index;
-    this.share = share;
-    this.address = address;
-    this.publicKey = publicKey;
-    this.partners = partners,
-      this.curve = curve;
-  }
-
-  /**
-   * Returns public key of participant with id of [idx]
-   * public key calculated from the public key of shamir polynomial coefficients.
-   * @param idx {string | BN} - index of participant
-   * @returns PublicKey
-   */
-  getPublicKey(idx: number | string): PublicKey{
-    return TssModule.calcPolyPoint(idx, this.curve.Fx)
-  }
-
-  publicKeyLargerThanHalfN() {
-    return TssModule.HALF_N.lt(this.publicKey.getX())
-  }
-
-  toJson(): DistKeyJson {
-    return {
-      index: this.index,
-      share: bn2str(this.share),
-      address: this.address,
-      publicKey: this.publicKey.encode('hex', true),
-      partners: this.partners,
-      curve: {
-        t: this.curve.t,
-        Fx: this.curve.Fx.map(p => p.encode('hex', true))
-      }
-    }
-  }
-
-  static fromJson(key: DistKeyJson): DistKey {
-    const publicKey = TssModule.keyFromPublic(key.publicKey)
-    const address = TssModule.pub2addr(publicKey)
-    if(address.toLowerCase() !== key.address.toLowerCase())
-      throw `DistKeyJson address mismatched with publicKey`
-    return new DistKey(
-      key.index,
-      TssModule.toBN(key.share),
-      address,
-      publicKey,
-      key.partners,
-      {
-        t: key.curve.t,
-        Fx: key.curve.Fx.map(p => TssModule.keyFromPublic(p))
-      },
-    );
-  }
-}
-
-const pattern_id = "^[1-9][0-9]*$";
-const schema_uint32 = {type: 'string', pattern: `^0x[0-9A-Fa-f]{64}$`};
-const schema_public_key = {type: 'string', pattern: `^[0-9A-Fa-f]{66}$`};
-const InputSchema = {
-  'round1': {
-    type: 'object',
-    properties: {
-      broadcast: {
-        type: 'object',
-        properties: {
-          Fx: {
-            type: 'array',
-            items: schema_public_key
-          },
-          sig: {
-            type: 'object',
-            properties:{
-              nonce: schema_public_key,
-              signature: {type: "string"},
-            },
-            required:['nonce', 'signature']
-          }
-        },
-        required: ["Fx", "sig"]
-      },
-    },
-    required: ['broadcast']
-  },
-  'round2':{
-    type: 'object',
-    properties: {
-      send: {
-        type: 'object',
-        properties: {
-          f: schema_uint32,
-        },
-        required: ['f']
-      },
-      broadcast: {
-        type: "object",
-        properties: {
-          allPartiesFxHash: {
-            type: 'object',
-            patternProperties: {
-              [pattern_id]: schema_uint32
-            }
-          }
-        },
-        required: ['allPartiesFxHash']
-      }
-    },
-    required: ['send', 'broadcast']
-  },
-  'round3': {
-    type: 'object',
-    properties: {
-      broadcast: {
-        type: 'object',
-        properties: {
-          malicious: {
-            type: 'array',
-            items: {type: 'string'},
-          }
-        },
-        required: ['malicious'],
-      },
-    },
-    required: ['broadcast'],
-  }
-}
-
 export type DKGOpts = {
   /** Unique random ID */
   id: string,
@@ -227,7 +79,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
   protected dealers: string[];
   private readonly value: BN | undefined;
   public readonly extraParams: any;
-  protected InputSchema: object = InputSchema;
+  protected RoundValidations: object = validations;
 
   constructor(options: DKGOpts) {
     super({rounds: ['round1','round2', 'round3'], ...options});
@@ -436,7 +288,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
       totalFx[0],
       qualified,
       {
-        t: 2,
+        t: this.t,
         Fx: totalFx
       }
     )

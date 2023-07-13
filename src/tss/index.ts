@@ -279,6 +279,12 @@ function schnorrAggregateSigs(t, sigs, indices){
   return {s, e}
 }
 
+export function validatePublicKey(publicKey: string|PublicKey): boolean {
+  if(typeof publicKey === 'string')
+    publicKey = keyFromPublic(publicKey);
+  return curve.curve.validate(publicKey);
+}
+
 export {
   curve,
   random,

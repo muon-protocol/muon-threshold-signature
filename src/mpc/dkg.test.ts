@@ -4,12 +4,13 @@
  * Sign message
  * Verify signature
  */
-import {DistKeyJson, DistributedKeyGeneration, DKGOpts} from "./dkg.js";
+import {DistributedKeyGeneration, DKGOpts} from "./dkg.js";
 import FakeNetwork from './fake-network.js';
 import {bn2str} from './utils.js'
 import Web3 from 'web3'
 import * as TssModule from '../tss/index.js'
 import lodash from 'lodash'
+import {DistKeyJson} from "./dist-key.js";
 
 const {range, uniq} = lodash
 const {toBN, randomHex} = Web3.utils

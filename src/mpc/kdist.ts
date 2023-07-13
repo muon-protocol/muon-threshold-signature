@@ -1,7 +1,8 @@
 import {MapOf} from "./types";
 import * as TssModule from "../tss/index.js";
 import {PublicKey, PublicKeyShare} from "../tss/types";
-import {DistKey, DistributedKeyGeneration, DKGOpts} from "./dkg.js";
+import {DistributedKeyGeneration, DKGOpts} from "./dkg.js";
+import {DistKey} from "./dist-key.js";
 
 export type KeyReDistOpts = DKGOpts & {previousT: number}
 

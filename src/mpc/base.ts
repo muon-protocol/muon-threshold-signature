@@ -1,6 +1,5 @@
 import LevelPromise from "./level-promise.js";
-import Ajv from 'ajv';
-import {MapOf, IMpcNetwork, RoundOutput, MPCConstructData, PartnerRoundReceive, PartyConnectivityGraph} from "./types";
+import {MapOf, IMpcNetwork, RoundOutput, PartnerRoundReceive, PartyConnectivityGraph} from "./types";
 import lodash from 'lodash'
 import { logger, Logger } from '@libp2p/logger'
 import {timeout} from "./utils.js";
@@ -9,11 +8,7 @@ import _ from 'lodash';
 const {countBy} = lodash;
 const random = () => Math.floor(Math.random()*9999999)
 const clone = (obj) => JSON.parse(JSON.stringify(obj))
-const ajv = new Ajv()
-// for(let round of this.rounds) {
-//   if(this.InputSchema[round])
-//     ajv.addSchema(this.InputSchema[round], round);
-// }
+
 
 export type MPCOpts = {
   id: string,
@@ -33,7 +28,7 @@ export class MultiPartyComputation {
   private roundsPromise: LevelPromise;
   /** roundsArrivedMessages[roundId][from] = <ResultT> */
   private roundsArrivedMessages: MapOf<MapOf<{send: any, broadcast: any}>> = {}
-  protected InputSchema: object;
+  protected RoundValidations: object;
   protected log: Logger;
 
   constructor(options: MPCOpts) {
@@ -222,11 +217,11 @@ export class MultiPartyComputation {
     if(lastError)
       throw lastError;
 
-    if(this.InputSchema[roundTitle] && !ajv.validate(this.InputSchema[roundTitle], result)){
+    if(this.RoundValidations[roundTitle] && !this.RoundValidations[roundTitle](result)){
       // console.dir({r,currentRound, result}, {depth: null})
-      this.log.error("round data validation error schema: %O, data: %o",this.InputSchema[roundTitle], result)
+      this.log.error(`round[${roundTitle}] data validation error. data: %o`, result)
       // @ts-ignore
-      throw ajv.errors.map(e => e.message).join("\n");
+      throw this.RoundValidations[roundTitle].errors.map(e => e.message).join("\n");
     }
 
     return result;
