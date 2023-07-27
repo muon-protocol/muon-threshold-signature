@@ -18,7 +18,7 @@ export type MPCOpts = {
 }
 
 export class MultiPartyComputation {
-  private readonly constructData;
+  protected constructData;
   protected t: number;
   public readonly id: string;
   public readonly starter: string
@@ -223,7 +223,6 @@ export class MultiPartyComputation {
       // @ts-ignore
       throw this.RoundValidations[roundTitle].errors.map(e => e.message).join("\n");
     }
-
     return result;
   }
 
@@ -240,6 +239,8 @@ export class MultiPartyComputation {
 
       for (let r = 0; r < this.rounds.length; r++) {
         Object.freeze(qualifiedPartners);
+        const roundStartTime = Date.now();
+
         const currentRound = this.rounds[r], previousRound = r>0 ? this.rounds[r-1] : null;
         this.log(`processing round mpc[${this.id}].${currentRound} ...`)
         /** prepare round handler inputs */
@@ -269,12 +270,17 @@ export class MultiPartyComputation {
         }
         this.log(`MPC[${this.id}].${currentRound} collecting round data`)
 
+        // TODO: its just for debuging
+        // need to be removed
+        let partyErrors = {};
+
         const callingPartners = r===0 ? this.partners : qualifiedPartners;
 
         let allPartiesResult: (PartnerRoundReceive|null)[] = await Promise.all(
           callingPartners.map(partner => {
             return this.tryToGetRoundDate(network, partner, r, dataToSend, isQualified[partner])
               .catch(e => {
+                partyErrors[partner] = JSON.stringify(e);
                 this.log.error(`[${this.id}][${currentRound}] error at node[${partner}] round ${r} %o`, e)
                 return null
               })
@@ -290,10 +296,14 @@ export class MultiPartyComputation {
 
         /** update qualified list based on current round outputs */
         qualifiedPartners = this.extractQualifiedList(this.roundsArrivedMessages[currentRound!], qualifiedPartners);
-        this.log(`MPC[${this.id}][${currentRound}] complete with qualified list: %o`, qualifiedPartners);
+        this.log(
+          `MPC[${this.id}][${currentRound}] complete in %d ms with qualified list: %o`,
+          Date.now() - roundStartTime,
+          qualifiedPartners
+        );
 
         if(qualifiedPartners.length < this.t) {
-          throw `${this.ConstructorName} needs ${this.t} partners but only [${qualifiedPartners.join(',')}] are qualified`
+          throw `${this.ConstructorName} needs ${this.t} partners but only [${qualifiedPartners.join(',')}] are qualified. partners=[${this.partners.join(',')}], round=${currentRound}, partyErrors=${JSON.stringify(partyErrors)}`
         }
       }
 

@@ -10,3 +10,13 @@ export type PublicKeyShare = {
   i: string,
   publicKey: PublicKey
 }
+
+export type PolynomialInfo = {
+  t: number,
+  Fx: PublicKey[]
+}
+
+export type PolynomialInfoJson = {
+  t: number,
+  Fx: string[]
+}

@@ -2,20 +2,19 @@ import {MapOf, RoundOutput} from "./types";
 import validations from './dkg-validations.js';
 import {MultiPartyComputation} from "./base.js";
 import {bn2str} from './utils.js'
-import Web3 from 'web3'
 import Polynomial from "../tss/polynomial.js";
 import * as TssModule from "../tss/index.js";
 import {PublicKey} from "../tss/types";
 import BN from 'bn.js';
+import {muonSha3} from "../sha3.js";
 import {DistKey} from "./dist-key.js";
-
-const {soliditySha3} = Web3.utils
+import {toBN} from "../helpers.js";
 
 /**
  * Round1 input/output types
  */
-type Round1Result = any
-type Round1Broadcast = {
+export type Round1Result = any
+export type Round1Broadcast = {
   /** commitment */
   Fx: string[],
   /** proof of possession */
@@ -30,11 +29,11 @@ type Round1Broadcast = {
 /**
  * Round2 input/output types
  */
-type Round2Result = {
+export type Round2Result = {
   /** key share */
   f: string,
 }
-type Round2Broadcast = {
+export type Round2Broadcast = {
   /**
    hash of commitment received from other parties
    will be used in malicious behaviour detection
@@ -45,8 +44,8 @@ type Round2Broadcast = {
 /**
  * broadcast malicious partners
  */
-type Round3Result = any;
-type Round3Broadcast = {
+export type Round3Result = any;
+export type Round3Broadcast = {
   malicious: string[],
 }
 
@@ -93,7 +92,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
       if(BN.isBN(value))
         this.value = value
       else
-        this.value = Web3.utils.toBN(value);
+        this.value = toBN(value);
     }
   }
 
@@ -103,13 +102,13 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
 
   async round1(_, __, networkId: string, qualified: string[]): Promise<RoundOutput<Round1Result, Round1Broadcast>> {
     // @ts-ignore
-    let fx = new Polynomial(this.t, TssModule.curve, this.value ? TssModule.toBN(this.value) : undefined);
+    let fx = new Polynomial(this.t, TssModule.curve, this.value ? toBN(this.value) : undefined);
     const Fx = fx.coefPubKeys();
 
     const k: BN = TssModule.random();
     const kPublic = TssModule.keyFromPrivate(k).getPublic();
 
-    const popMsg = soliditySha3(
+    const popMsg = muonSha3(
       /** i */
       {type: "uint64", value: networkId},
       /** CTX */
@@ -119,7 +118,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
       /** Ri = g^k */
       {type: "bytes", value: "0x"+kPublic.encode('hex', true)},
     )
-    const popSign = TssModule.schnorrSign(fx.coefficients[0].getPrivate(), k, kPublic, TssModule.keyFromPublic(Fx[0]), popMsg);
+    const popSign = TssModule.schnorrSign(fx.coefficients[0].getPrivate(), fx.coefficients[0].getPublic(), k, kPublic, popMsg)
     const sig = {
       nonce: kPublic.encode('hex', true),
       signature: TssModule.stringifySignature(popSign)
@@ -142,12 +141,18 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
      */
     const r1Msg = this.getRoundReceives('round1')
 
+    const nonQualifiedList: string[] = []
     const malignant: string[] = [];
 
     /** check each node's commitments sent to all nodes are the same. */
     qualified.forEach(sender => {
-      const {Fx, sig: {nonce, signature}} = prevStepBroadcast[sender];
-      const popHash = soliditySha3(
+      const broadcast = prevStepBroadcast[sender];
+      if(!broadcast) {
+        nonQualifiedList.push(sender)
+        return;
+      }
+      const {Fx, sig: {nonce, signature}} = broadcast;
+      const popHash = muonSha3(
         /** i */
         {type: "uint64", value: sender},
         /** CTX */
@@ -174,7 +179,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
 
     /** exclude malignant from qualified list */
     const newQualified = qualified
-      .filter(id => !malignant.includes(id))
+      .filter(id => (!malignant.includes(id) && !nonQualifiedList.includes(id)))
 
     const store = {}
     const send = {}
@@ -187,8 +192,8 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
       send[id] = {
         f: bn2str(this.getStore('round1').fx.calc(id)),
       }
-      if(qualified.includes(id)) {
-        broadcast.allPartiesFxHash[id] = soliditySha3(...prevStepBroadcast[id].Fx.map(v => ({t: 'bytes', v})))
+      if(newQualified.includes(id)) {
+        broadcast.allPartiesFxHash[id] = muonSha3(...prevStepBroadcast[id].Fx.map(v => ({t: 'bytes', v})))
       }
     })
     return {store, send, broadcast, qualifieds: newQualified}
@@ -207,7 +212,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
     /** verify round2.broadcast.Fx received from all partners */
     qualified.map(sender => {
       /** sender commitment hash */
-      const senderFxHash = soliditySha3(...r1Msgs[sender].broadcast.Fx.map(v => ({t: 'bytes', v})));
+      const senderFxHash = muonSha3(...r1Msgs[sender].broadcast.Fx.map(v => ({t: 'bytes', v})));
 
       /** check for the same commitment sent to all parties */
       qualified.every(receiver => {
@@ -222,7 +227,7 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
 
       const Fx = r1Msgs[sender].broadcast.Fx.map(k => TssModule.keyFromPublic(k))
       const p1 = TssModule.calcPolyPoint(networkId, Fx);
-      const p2 = TssModule.curve.g.mul(TssModule.toBN(r2Msgs[sender].send.f))
+      const p2 = TssModule.curve.g.mul(toBN(r2Msgs[sender].send.f))
       if(!p1.eq(p2)) {
         console.log(`partner [${sender}] founded malignant at round3 Fx check`)
         malicious.push(sender);
@@ -256,10 +261,10 @@ export class DistributedKeyGeneration extends MultiPartyComputation {
     let share = qualified
       .map(from => r2Msgs[from].send.f)
       .reduce((acc, current) => {
-        acc.iadd(TssModule.toBN(current))
+        acc.iadd(toBN(current))
         return acc
-      }, TssModule.toBN('0'))
-    const nInv = TssModule.toBN(qualified.length.toString()).invm(TssModule.curve.n!)
+      }, toBN('0'))
+    const nInv = toBN(qualified.length.toString()).invm(TssModule.curve.n!)
     share.imul(nInv)
     share = share.umod(TssModule.curve.n)
 

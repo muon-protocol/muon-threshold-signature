@@ -170,35 +170,65 @@ function key2pub(privateKey) {
   return curve.g.mul(_PK);
 }
 
-function schnorrHash(noncePoint, pubKey, msg) {
-  const nonceAddress = pub2addr(noncePoint);
-  const nonceAddressBuff = Buffer.from(nonceAddress.replace(/^0x/i, ''), 'hex');
-
-  // calculate public ket address to add to the challenge hash
-  const pubKeyAddress = pub2addr(pubKey);
-  const pubKeyAddressBuff = Buffer.from(pubKeyAddress.replace(/^0x/i, ''), 'hex');
-
-  const msgBuff = Buffer.from(msg.replace(/^0x/i, ''), 'hex');
-
-  const totalBuff = Buffer.concat([nonceAddressBuff, pubKeyAddressBuff, msgBuff]);
+export function schnorrHash(signingPublicKey: PublicKey, nonceTimesGeneratorAddress, msg) {
+  let totalBuff = Buffer.concat([
+    /** signingPubKeyX */
+    signingPublicKey.getX().toBuffer('be', 32),
+    /** pubKeyYParity */
+    Buffer.from(signingPublicKey.getY().isEven() ? "00" : "01", "hex"),
+    /** msg hash */
+    Buffer.from(msg.replace(/^0x/i, ''), 'hex'),
+    /** nonceGeneratorAddress */
+    Buffer.from(nonceTimesGeneratorAddress.replace(/^0x/i, ''), 'hex'),
+  ])
   // @ts-ignore
-  return keccak256(totalBuff);
+  return keccak256(totalBuff)
 }
 
-function schnorrSign(sharedPrivateKey, sharedK, noncePoint, publicKey, msg) {
-  // make _sharedPrivateKey that is the BN from of sharedPrivateKey
-  let _sharedPrivateKey: BN;
-  if (BN.isBN(sharedPrivateKey)) {
-    _sharedPrivateKey = sharedPrivateKey;
-  } else {
-    _sharedPrivateKey = toBN(sharedPrivateKey);
-  }
+export function schnorrSign(signingShare:BN|string, signingPubKey:PublicKey, nonceShare:BN|string, noncePublicKey:PublicKey, msg) {
+  let _signingShare = BN.isBN(signingShare) ? signingShare : toBN(signingShare);
+  let _nonceShare = BN.isBN(nonceShare) ? nonceShare : toBN(nonceShare);
+  let nonceTimesGeneratorAddress = pub2addr(noncePublicKey)
+  let e = toBN(schnorrHash(signingPubKey, nonceTimesGeneratorAddress, msg))
+  let s = _nonceShare.sub(_signingShare.mul(e)).umod(curve.n);
+  return {s, e}
+}
 
-  // calculate 'e' of the signature consider adding public key to challenge value
-  const e = toBN(schnorrHash(noncePoint, publicKey, msg));
-  const s = sharedK.sub(_sharedPrivateKey.mul(e)).umod(curve.n);
+export function schnorrVerify(signingPublicKey: PublicKey, msg, sig:{s: BN, e: BN}|string) {
+  if(typeof sig === 'string')
+    sig = splitSignature(sig);
+  if(!validatePublicKey(signingPublicKey))
+    return false
+  const s = sig.s.umod(curve.n!)
+  let r_v = pointAdd(curve.g.mul(s), signingPublicKey.mul(sig.e))
+  let nonceTimesGeneratorAddress = pub2addr(r_v)
+  let e_v = schnorrHash(signingPublicKey, nonceTimesGeneratorAddress, msg)
+  return toBN(e_v).eq(sig.e);
+}
 
-  return {s, e};
+export function schnorrVerifyWithNonceAddress(hash, signature, nonceAddress, signingPubKey) {
+  nonceAddress = nonceAddress.toLowerCase();
+  signature = toBN(signature).umod(curve.n!);
+
+  if(!validatePublicKey(signingPubKey))
+    return false;
+
+  if(toBN(nonceAddress).isZero() || signature.isZero() || toBN(hash).isZero())
+    return false
+
+  // @ts-ignore
+  const e = toBN(schnorrHash(signingPubKey, nonceAddress, hash))
+
+  let recoveredPubKey = ethJsUtil.ecrecover(
+    curve.n!.sub(signingPubKey.getX().mul(signature).umod(curve.n)).toBuffer('be', 32),
+    signingPubKey.getY().isEven() ? 27 : 28,
+    signingPubKey.getX().toBuffer('be', 32),
+    e.mul(signingPubKey.getX()).umod(curve.n!).toBuffer('be', 32)
+  );
+  const addrBuf = ethJsUtil.pubToAddress(recoveredPubKey);
+  const addr    = ethJsUtil.bufferToHex(addrBuf);
+
+  return nonceAddress === addr;
 }
 
 export function stringifySignature(sign: {s: BN, e: BN}): string {
@@ -213,58 +243,6 @@ export function splitSignature(signature: string): {s: BN, e: BN} {
     e: toBN(`0x${bytes.substr(0, 64)}`),
     s: toBN(`0x${bytes.substr(64, 64)}`),
   }
-}
-
-function schnorrVerify(pubKey: PublicKey, msg, sig:{s: BN, e: BN}|string) {
-  if(typeof sig === 'string') {
-    sig = splitSignature(sig);
-  }
-
-  // Prevent denial of service attacks by bounding the 's' and 'e' to values lower than curve.n
-  const s = sig.s.umod(curve.n);
-  const e = sig.e.umod(curve.n);
-
-  // Calculate verifying values of signature use public key as part of challenge hash
-  const rv = pointAdd(curve.g.mul(s), pubKey.mul(e));
-  const ev = schnorrHash(rv, pubKey, msg);
-  const result = toBN(ev).eq(e);
-
-  // Return only if the public key value is a valid point on curve
-  if (pubKey.validate() === false) {
-    return false;
-  } else {
-    return result;
-  }
-}
-
-function schnorrVerifyWithNonceAddress(hash, signature, nonceAddress, signingPubKey) {
-  nonceAddress = nonceAddress.toLowerCase();
-  const nonce = toBN(nonceAddress)
-  hash = toBN(hash)
-  signature = toBN(signature)
-
-  if(!signature.lt(curve.n))
-    throw "signature must be reduced modulo N"
-
-  if(nonce.isZero() || signature.isZero() || hash.isZero())
-    throw `no zero inputs allowed`
-
-  // @ts-ignore
-  const e = toBN(keccak256(Buffer.concat([
-    nonce.toBuffer('be', 20),
-    hash.toBuffer('be', 32)
-  ])))
-
-  let recoveredPubKey = ethJsUtil.ecrecover(
-    curve.n!.sub(signingPubKey.getX().mul(signature).umod(curve.n)).toBuffer('be', 32),
-    signingPubKey.getY().isEven() ? 27 : 28,
-    signingPubKey.getX().toBuffer('be', 32),
-    e.mul(signingPubKey.getX()).umod(curve.n!).toBuffer('be', 32)
-  );
-  const addrBuf = ethJsUtil.pubToAddress(recoveredPubKey);
-  const addr    = ethJsUtil.bufferToHex(addrBuf);
-
-  return nonceAddress === addr;
 }
 
 function schnorrAggregateSigs(t, sigs, indices){
@@ -301,10 +279,6 @@ export {
   subKeys,
   key2pub,
   pub2addr,
-  schnorrHash,
-  schnorrSign,
-  schnorrVerify,
-  schnorrVerifyWithNonceAddress,
   schnorrAggregateSigs,
   // use
   H,

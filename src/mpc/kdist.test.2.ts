@@ -8,15 +8,14 @@ import {DistributedKeyGeneration, DKGOpts} from "./dkg.js";
 import {KeyReDistOpts, KeyRedistribution} from "./kdist.js"
 import FakeNetwork from './fake-network.js';
 import {bn2str} from './utils.js'
-import Web3 from 'web3'
 import * as TssModule from "../tss/index.js";
 import lodash from 'lodash'
 import {DistKeyJson} from "./dist-key.js";
 import {toBN} from "../helpers.js";
-import {PolynomialInfoJson} from "../tss/types";
+import {MapOf} from "./types";
+import {KeyConstructionData, KeyReDistributeData} from "./kdist.test.js";
 
 const {range, uniq} = lodash
-const {randomHex} = Web3.utils
 
 /**
  * Share privateKey between 5 individuals
@@ -24,20 +23,9 @@ const {randomHex} = Web3.utils
  */
 const N = TssModule.curve.n
 const threshold = 2;
-const nextThreshold = 4;
-const partyCount = 6
-const partners = range(partyCount).map(i => `${i+1}`)
+const partyCount = 12
+const allPartners = range(partyCount).map(i => `${i+1}`)
 const random = () => Math.floor(Math.random()*9999999)
-
-export type KeyConstructionData = {
-  id: string,
-  partners: string[],
-  dealers?: string[],
-  t: number,
-  pk?: string,
-}
-
-export type KeyReDistributeData = KeyConstructionData & {publicKey: string, previousPolynomial: PolynomialInfoJson};
 
 function resultOk(realKey: string|null, realPubKey: string|null, resultPubKey: string, reconstructedKey, reconstructedPubKey) {
   if(resultPubKey !== reconstructedPubKey)
@@ -91,14 +79,15 @@ async function keyRedistribute(
 
   let keyReDistOpts: KeyReDistOpts = {
     id: cData.id,
-    starter: "1",
+    starter: (cData.dealers || cData.partners)[0],
     partners: cData.partners,
     dealers: cData.dealers,
     t: cData.t,
     publicKey: cData.publicKey,
     previousPolynomial: cData.previousPolynomial,
   }
-  let keyReDists = partners.map((p, index) => {
+  let keyReDists = partners.map(p => {
+    const index = (cData.dealers||cData.partners).findIndex(id => id===p);
     return new KeyRedistribution({...keyReDistOpts, value: shares[index]?.share})
   })
 
@@ -113,65 +102,69 @@ async function keyRedistribute(
 
 async function run() {
 
-  const fakeNets:FakeNetwork[] = partners.map(id => new FakeNetwork(id));
+  const fakeNets:MapOf<FakeNetwork> = allPartners.reduce((obj, id) => (obj[id]=new FakeNetwork(id), obj), {});
 
-  const specialPrivateKeys = [
-    /** first 100 private keys */
-    ...(new Array(100).fill(0).map((_, i) => bn2str(toBN(i+1).umod(N!)))),
+  const numReshare = 1000;
+  const realPrivateKey = bn2str(toBN(1));
 
-    /** 100 random and unknown private key */
-    ...(new Array(100).fill(null)),
-
-    /** 100 random and known private key */
-    ...(new Array(100).fill(0).map(() => bn2str(toBN(randomHex(32)).umod(N!)))),
-
-    /** last 100 private keys */
-    ...(new Array(100).fill(0).map((_, i) => bn2str(TssModule.curve.n!.subn(100-i)))),
-  ]
-
-  const t1 = Date.now()
-  for(let i=0 ; i<specialPrivateKeys.length ; i++) {
-    const startTime = Date.now();
-    // const realPrivateKey = bn2str(toBN(randomHex(32)).umod(N));
-    const realPrivateKey = specialPrivateKeys[i];
-
-    const initialPartners = partners.slice(0, nextThreshold+1);
-    let initialKeyShares = await keyGen(initialPartners, fakeNets, {
+  let prevPartners = allPartners.slice(0, threshold+1);
+  let prevKeyShares = await keyGen(
+    // partners
+    prevPartners,
+    // networks
+    prevPartners.map(id => fakeNets[id]),
+    // cData
+    {
       id: `dkg-${Date.now()}${random()}`,
-      partners: initialPartners,
+      partners: prevPartners,
       t: threshold,
       pk: realPrivateKey,
-    });
-
-    if(!checkSharesCorrectness(realPrivateKey, threshold, initialKeyShares)) {
-      console.log(`i: ${i+1}/${specialPrivateKeys.length}, initial key share failed`)
-      continue;
     }
+  );
+  if(!checkSharesCorrectness(realPrivateKey, threshold, prevKeyShares))
+    throw `key distribution failed`;
 
+  const t1 = Date.now()
+  for(let i=0 ; i<numReshare ; i++) {
+    const startTime = Date.now();
+    // const realPrivateKey = bn2str(toBN(randomHex(32)).umod(N));
+
+    const dealers = prevPartners.slice(0, threshold+1)
+    prevKeyShares = prevKeyShares.slice(0, threshold+1)
+
+    const newPartners = lodash.shuffle(allPartners).filter(id => !dealers.includes(id)).slice(0, threshold+1)
+    const partners = lodash.shuffle([...dealers, ...newPartners])
+
+    // console.log({dealers, newPartners, partners, prevKeyShares})
     let keyShares = await keyRedistribute(
       partners,
-      fakeNets,
+      partners.map(id => fakeNets[id]),
       {
         id: `kredist-${Date.now()}${random()}`,
         partners,
-        dealers: initialPartners,
-        publicKey: initialKeyShares[0].publicKey,
-        previousPolynomial: initialKeyShares[0].polynomial!,
-        t: nextThreshold,
+        dealers,
+        publicKey: prevKeyShares[0].publicKey,
+        previousPolynomial: prevKeyShares[0].polynomial!,
+        t: threshold,
       },
-      initialKeyShares
+      prevKeyShares,
     );
+    // console.log(keyShares)
 
-    if(checkSharesCorrectness(realPrivateKey, nextThreshold, keyShares))
-      console.log(`i: ${i+1}/${specialPrivateKeys.length}, match: OK, key party: ${keyShares[0].partners} time: ${Date.now() - startTime} ms`)
+    if(checkSharesCorrectness(realPrivateKey, threshold, keyShares))
+      console.log(`i: ${i+1}/${numReshare}, match: OK, key party: ${keyShares[0].partners} time: ${Date.now() - startTime} ms`)
     else {
-      console.log(`i: ${i+1}/${specialPrivateKeys.length}, match: false`)
+      console.log(`i: ${i+1}/${numReshare}, match: false`)
+      break;
     }
+
+    prevPartners = partners;
+    prevKeyShares = keyShares;
   }
   const t2 = Date.now()
   const dt = t2 - t1
   console.log(`  total time: ${Math.round(dt)} ms`)
-  console.log(`average time: ${Math.round(dt/specialPrivateKeys.length)} ms`)
+  console.log(`average time: ${Math.round(dt/numReshare)} ms`)
 }
 
 run()
