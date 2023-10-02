@@ -117,6 +117,7 @@ async function run() {
     {
       id: `dkg-${Date.now()}${random()}`,
       partners: prevPartners,
+      starter: prevPartners[0],
       t: threshold,
       pk: realPrivateKey,
     }
@@ -143,6 +144,7 @@ async function run() {
         id: `kredist-${Date.now()}${random()}`,
         partners,
         dealers,
+        starter: dealers[0],
         publicKey: prevKeyShares[0].publicKey,
         previousPolynomial: prevKeyShares[0].polynomial!,
         t: threshold,
